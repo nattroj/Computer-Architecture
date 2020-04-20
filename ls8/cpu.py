@@ -2,34 +2,75 @@
 
 import sys
 
+LDI = 0b10000010
+PRN = 0b01000111
+HLT = 0b00000001
+MUL = 0b10100010
+
 class CPU:
     """Main CPU class."""
 
     def __init__(self):
         """Construct a new CPU."""
-        pass
+        self.ram = [0] * 256
+        self.registers = [0] * 8
+        self.pc = 0
+        self.running = True
 
-    def load(self):
+        self.dispatcher = {
+            LDI: self.LDI,
+            PRN: self.PRN,
+            HLT: self.HLT,
+            MUL: self.MUL
+        }
+
+    def LDI(self):
+        operand_a = self.ram_read(self.pc + 1)
+        operand_b = self.ram_read(self.pc + 2)
+
+        self.registers[operand_a] = operand_b
+
+        self.pc += 3
+
+    def PRN(self):
+        operand_a = self.ram_read(self.pc + 1)
+
+        print(self.registers[operand_a])
+
+        self.pc += 2
+
+    def MUL(self):
+        operand_a_1 = self.ram_read(self.pc + 1)
+        operand_b_1 = self.ram_read(self.pc + 2)
+
+        operand_a_2 = self.registers[operand_a_1]
+        operand_b_2 = self.registers[operand_b_1]
+
+        print(operand_a_2 * operand_b_2)
+
+        self.pc += 3
+
+
+    def HLT(self):
+        self.running = False
+
+    def ram_read(self, MAR):
+        return self.ram[MAR]
+
+    def ram_write(self, MAR, MDR):
+        self.ram[MAR] = MDR
+
+    def load(self, file_path):
         """Load a program into memory."""
-
         address = 0
 
-        # For now, we've just hardcoded a program:
+        with open(file_path, 'r') as f:
+            for line in f.readlines():
+                instruction = int(line.strip().split(' ')[0], 2)
+                self.ram_write(address, instruction)
 
-        program = [
-            # From print8.ls8
-            0b10000010, # LDI R0,8
-            0b00000000,
-            0b00001000,
-            0b01000111, # PRN R0
-            0b00000000,
-            0b00000001, # HLT
-        ]
-
-        for instruction in program:
-            self.ram[address] = instruction
-            address += 1
-
+                address += 1
+                
 
     def alu(self, op, reg_a, reg_b):
         """ALU operations."""
@@ -62,4 +103,12 @@ class CPU:
 
     def run(self):
         """Run the CPU."""
-        pass
+
+        while self.running:
+            ir = self.ram_read(self.pc)
+
+            if ir in self.dispatcher:
+                self.dispatcher[ir]()
+            else:
+                print(f'Unknown instruction: "{ir}".')
+                self.running = False
