@@ -5,7 +5,14 @@ import sys
 LDI = 0b10000010
 PRN = 0b01000111
 HLT = 0b00000001
+ADD = 0b10100000
 MUL = 0b10100010
+PUSH = 0b01000101
+POP = 0b01000110
+CALL= 0b01010000
+RET = 0b00010001
+MULT2PRINT = 0b10100000 
+INSTRUCTION_MASK = 0b11000000
 
 class CPU:
     """Main CPU class."""
@@ -13,7 +20,10 @@ class CPU:
     def __init__(self):
         """Construct a new CPU."""
         self.ram = [0] * 256
-        self.registers = [0] * 8
+        self.reg = [0] * 8
+
+        self.reg[7] = 0xf4
+
         self.pc = 0
         self.running = True
 
@@ -21,35 +31,79 @@ class CPU:
             LDI: self.LDI,
             PRN: self.PRN,
             HLT: self.HLT,
-            MUL: self.MUL
+            MUL: self.MUL,
+            PUSH: self.PUSH,
+            POP: self.POP,
+            CALL: self.CALL,
+            RET: self.RET,
+            ADD: self.ADD
         }
 
     def LDI(self):
-        operand_a = self.ram_read(self.pc + 1)
-        operand_b = self.ram_read(self.pc + 2)
+        register_num = self.ram_read(self.pc + 1)
+        value = self.ram_read(self.pc + 2)
 
-        self.registers[operand_a] = operand_b
+        self.reg[register_num] = value
 
-        self.pc += 3
 
     def PRN(self):
-        operand_a = self.ram_read(self.pc + 1)
+        register_num = self.ram_read(self.pc + 1)
 
-        print(self.registers[operand_a])
+        print(self.reg[register_num])
 
-        self.pc += 2
+    
+    def ADD(self):
+        register_num_1 = self.ram_read(self.pc + 1)
+        register_num_2 = self.ram_read(self.pc + 2)
+
+        value_1 = self.reg[register_num_1]
+        value_2 = self.reg[register_num_2]
+
+        self.reg[register_num_1] = value_1 + value_2
 
     def MUL(self):
-        operand_a_1 = self.ram_read(self.pc + 1)
-        operand_b_1 = self.ram_read(self.pc + 2)
+        register_num_1 = self.ram_read(self.pc + 1)
+        register_num_2 = self.ram_read(self.pc + 2)
 
-        operand_a_2 = self.registers[operand_a_1]
-        operand_b_2 = self.registers[operand_b_1]
+        value_1 = self.reg[register_num_1]
+        value_2 = self.reg[register_num_2]
 
-        print(operand_a_2 * operand_b_2)
+        self.reg[register_num_1] = value_1 * value_2
 
-        self.pc += 3
+    
+    def PUSH(self, call=False):
+        # shift stack pointer down to the next empty slot
+        self.reg[7] -= 1
 
+        if call:
+            # push the address of pc + 2 to the stack
+            self.ram_write(self.reg[7], self.pc + 2)
+        else:
+            # push the value at pc + 1 to the stack
+            register_num = self.ram_read(self.pc + 1)
+            self.ram_write(self.reg[7], self.reg[register_num])
+
+    def POP(self, ret=False):
+        register_num = self.ram_read(self.pc + 1)
+
+        if ret:
+            # set pc to the address stored at the top of the stack
+            self.pc = self.ram_read(self.reg[7])
+        else:
+            # pop the value at the top of the stack to a specific register number
+            self.reg[register_num] = self.ram_read(self.reg[7])
+
+        # shift stack pointer up to the next item on the stack
+        self.reg[7] += 1
+    
+    def CALL(self):
+        # set the pc to the value stored in the register number
+        register_number = self.ram_read(self.pc + 1)
+        self.PUSH(call=True)
+        self.pc = self.reg[register_number]
+
+    def RET(self):
+        self.POP(ret=True)
 
     def HLT(self):
         self.running = False
@@ -66,11 +120,11 @@ class CPU:
 
         with open(file_path, 'r') as f:
             for line in f.readlines():
-                instruction = int(line.strip().split(' ')[0], 2)
-                self.ram_write(address, instruction)
-
-                address += 1
-                
+                line = line.strip().split(' ')[0]
+                if line.startswith(('0', '1')):
+                    instruction = int(line, 2)
+                    self.ram_write(address, instruction)
+                    address += 1
 
     def alu(self, op, reg_a, reg_b):
         """ALU operations."""
@@ -107,8 +161,13 @@ class CPU:
         while self.running:
             ir = self.ram_read(self.pc)
 
+            instruction_length = ((ir & INSTRUCTION_MASK) >> 6 ) + 1
+
             if ir in self.dispatcher:
                 self.dispatcher[ir]()
+
             else:
-                print(f'Unknown instruction: "{ir}".')
                 self.running = False
+            
+            if ir != CALL and ir != RET:
+                self.pc += instruction_length
