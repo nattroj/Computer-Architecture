@@ -120,8 +120,8 @@ class CPU:
 
         with open(file_path, 'r') as f:
             for line in f.readlines():
-                line = line.strip().split(' ')[0]
-                if line.startswith(('0', '1')):
+                line = line.split('#')[0].strip()
+                if line.startswith(('0', '1')) and len(line) == 8:
                     instruction = int(line, 2)
                     self.ram_write(address, instruction)
                     address += 1
