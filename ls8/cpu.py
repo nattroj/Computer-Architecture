@@ -11,8 +11,8 @@ PUSH = 0b01000101
 POP = 0b01000110
 CALL= 0b01010000
 RET = 0b00010001
-MULT2PRINT = 0b10100000 
 INSTRUCTION_MASK = 0b11000000
+ALU_MASK = 0b00100000
 
 class CPU:
     """Main CPU class."""
@@ -31,12 +31,10 @@ class CPU:
             LDI: self.LDI,
             PRN: self.PRN,
             HLT: self.HLT,
-            MUL: self.MUL,
             PUSH: self.PUSH,
             POP: self.POP,
             CALL: self.CALL,
             RET: self.RET,
-            ADD: self.ADD
         }
 
     def LDI(self):
@@ -51,26 +49,6 @@ class CPU:
 
         print(self.reg[register_num])
 
-    
-    def ADD(self):
-        register_num_1 = self.ram_read(self.pc + 1)
-        register_num_2 = self.ram_read(self.pc + 2)
-
-        value_1 = self.reg[register_num_1]
-        value_2 = self.reg[register_num_2]
-
-        self.reg[register_num_1] = value_1 + value_2
-
-    def MUL(self):
-        register_num_1 = self.ram_read(self.pc + 1)
-        register_num_2 = self.ram_read(self.pc + 2)
-
-        value_1 = self.reg[register_num_1]
-        value_2 = self.reg[register_num_2]
-
-        self.reg[register_num_1] = value_1 * value_2
-
-    
     def PUSH(self, call=False):
         # shift stack pointer down to the next empty slot
         self.reg[7] -= 1
@@ -128,10 +106,10 @@ class CPU:
 
     def alu(self, op, reg_a, reg_b):
         """ALU operations."""
-
-        if op == "ADD":
+        if op == ADD:
             self.reg[reg_a] += self.reg[reg_b]
-        #elif op == "SUB": etc
+        elif op == MUL: 
+            self.reg[reg_a] *= self.reg[reg_b]
         else:
             raise Exception("Unsupported ALU operation")
 
@@ -160,10 +138,15 @@ class CPU:
 
         while self.running:
             ir = self.ram_read(self.pc)
-
             instruction_length = ((ir & INSTRUCTION_MASK) >> 6 ) + 1
+            is_alu = (ir & ALU_MASK) >> 5 == 1
 
-            if ir in self.dispatcher:
+            if is_alu:
+                register_a = self.ram_read(self.pc + 1)
+                register_b = self.ram_read(self.pc + 2)
+                self.alu(ir, register_a, register_b)
+
+            elif ir in self.dispatcher:
                 self.dispatcher[ir]()
 
             else:
